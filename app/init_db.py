@@ -1,6 +1,6 @@
-from db.crud import create_book, create_category, get_category_by_title
-from db.db import Base, SessionLocal, engine
-from db.models import Book, Category
+from app.db.crud import create_book, create_category, get_category_by_title
+from app.db.db import Base, SessionLocal, engine
+from app.db.models import Book, Category
 
 
 def recreate_tables():
