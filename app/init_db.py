@@ -1,3 +1,8 @@
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+
 from app.db.crud import create_book, create_category, get_category_by_title
 from app.db.db import Base, SessionLocal, engine
 from app.db.models import Book, Category

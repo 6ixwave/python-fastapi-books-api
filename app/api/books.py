@@ -14,14 +14,7 @@ def list_books(
     category_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    if category_id is None:
-        return crud.get_books(db)
-
-    category = crud.get_category(db, category_id)
-    if category is None:
-        raise HTTPException(status_code=404, detail="Category not found")
-
-    return crud.get_books_by_category(db, category_id)
+    return crud.get_books(db, category_id=category_id)
 
 
 @router.get("/{book_id}", response_model=BookRead)

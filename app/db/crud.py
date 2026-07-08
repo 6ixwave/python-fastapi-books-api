@@ -60,17 +60,11 @@ def get_book(session, book_id):
     return session.get(Book, book_id)
 
 
-def get_books(session):
-    return session.query(Book).order_by(Book.id).all()
-
-
-def get_books_by_category(session, category_id):
-    return (
-        session.query(Book)
-        .filter(Book.category_id == category_id)
-        .order_by(Book.id)
-        .all()
-    )
+def get_books(session, category_id=None):
+    query = session.query(Book)
+    if category_id is not None:
+        query = query.filter(Book.category_id == category_id)
+    return query.order_by(Book.id).all()
 
 
 def update_book(session, book_id, **fields):
