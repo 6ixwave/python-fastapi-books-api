@@ -1,54 +1,63 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
+from app import schemas
 from app.db import crud
 from app.db.db import get_db
-from app.schemas import BookCreate, BookRead, BookUpdate
 
 
-router = APIRouter(prefix="/books", tags=["books"])
+router = APIRouter(prefix="/books", tags=["Books"])
 
 
-@router.get("/", response_model=list[BookRead])
-def list_books(
-    category_id: int | None = Query(default=None),
+def require_book(db: Session, book_id: int):
+    book = crud.find_book(db, book_id)
+    if book is None:
+        raise HTTPException(status_code=404, detail="Book not found")
+    return book
+
+
+def ensure_category_exists(db: Session, category_id: int) -> None:
+    if crud.find_category(db, category_id) is None:
+        raise HTTPException(status_code=422, detail="Category does not exist")
+
+
+@router.get("", response_model=list[schemas.BookRead], summary="List and filter books")
+def get_books(
+    category_id: int | None = Query(default=None, gt=0),
     db: Session = Depends(get_db),
 ):
-    return crud.get_books(db, category_id=category_id)
+    return crud.list_books(db, category_id)
 
 
-@router.get("/{book_id}", response_model=BookRead)
+@router.get("/{book_id}", response_model=schemas.BookRead, summary="Get a book")
 def get_book(book_id: int, db: Session = Depends(get_db)):
-    book = crud.get_book(db, book_id)
-    if book is None:
-        raise HTTPException(status_code=404, detail="Book not found")
-    return book
+    return require_book(db, book_id)
 
 
-@router.post("/", response_model=BookRead, status_code=status.HTTP_201_CREATED)
-def create_book(book_data: BookCreate, db: Session = Depends(get_db)):
-    category = crud.get_category(db, book_data.category_id)
-    if category is None:
-        raise HTTPException(status_code=400, detail="Category does not exist")
-
-    return crud.create_book(db, **book_data.model_dump())
-
-
-@router.put("/{book_id}", response_model=BookRead)
-def update_book(book_id: int, book_data: BookUpdate, db: Session = Depends(get_db)):
-    category = crud.get_category(db, book_data.category_id)
-    if category is None:
-        raise HTTPException(status_code=400, detail="Category does not exist")
-
-    book = crud.update_book(db, book_id, **book_data.model_dump())
-    if book is None:
-        raise HTTPException(status_code=404, detail="Book not found")
-    return book
+@router.post(
+    "",
+    response_model=schemas.BookRead,
+    status_code=status.HTTP_201_CREATED,
+    summary="Create a book",
+)
+def create_book(payload: schemas.BookCreate, db: Session = Depends(get_db)):
+    ensure_category_exists(db, payload.category_id)
+    return crud.add_book(db, payload)
 
 
-@router.delete("/{book_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_book(book_id: int, db: Session = Depends(get_db)):
-    deleted = crud.delete_book(db, book_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail="Book not found")
-    return None
+@router.put("/{book_id}", response_model=schemas.BookRead, summary="Update a book")
+def update_book(
+    book_id: int, payload: schemas.BookUpdate, db: Session = Depends(get_db)
+):
+    book = require_book(db, book_id)
+    ensure_category_exists(db, payload.category_id)
+    return crud.edit_book(db, book, payload)
+
+
+@router.delete(
+    "/{book_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Delete a book"
+)
+def delete_book(book_id: int, db: Session = Depends(get_db)) -> Response:
+    book = require_book(db, book_id)
+    crud.remove_book(db, book)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

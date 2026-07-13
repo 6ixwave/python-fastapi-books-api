@@ -1,91 +1,78 @@
-from .models import Book, Category
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
+
+from app import schemas
+from app.db.models import Book, Category
 
 
-def create_category(session, title):
-    category = Category(title=title)
-    session.add(category)
-    session.commit()
-    session.refresh(category)
+def list_categories(db: Session) -> list[Category]:
+    return list(db.scalars(select(Category).order_by(Category.id)))
+
+
+def find_category(db: Session, category_id: int) -> Category | None:
+    return db.get(Category, category_id)
+
+
+def find_category_by_title(db: Session, title: str) -> Category | None:
+    statement = select(Category).where(func.lower(Category.title) == title.lower())
+    return db.scalar(statement)
+
+
+def add_category(db: Session, payload: schemas.CategoryCreate) -> Category:
+    category = Category(title=payload.title)
+    db.add(category)
+    db.commit()
+    db.refresh(category)
     return category
 
 
-def get_category(session, category_id):
-    return session.get(Category, category_id)
-
-
-def get_category_by_title(session, title):
-    return session.query(Category).filter(Category.title == title).first()
-
-
-def get_categories(session):
-    return session.query(Category).order_by(Category.id).all()
-
-
-def update_category(session, category_id, title):
-    category = get_category(session, category_id)
-    if category is None:
-        return None
-
-    category.title = title
-    session.commit()
-    session.refresh(category)
+def edit_category(
+    db: Session, category: Category, payload: schemas.CategoryUpdate
+) -> Category:
+    category.title = payload.title
+    db.commit()
+    db.refresh(category)
     return category
 
 
-def delete_category(session, category_id):
-    category = get_category(session, category_id)
-    if category is None:
-        return False
-
-    session.delete(category)
-    session.commit()
-    return True
+def category_has_books(db: Session, category_id: int) -> bool:
+    statement = select(Book.id).where(Book.category_id == category_id).limit(1)
+    return db.scalar(statement) is not None
 
 
-def create_book(session, title, description, price, category_id, url=""):
-    book = Book(
-        title=title,
-        description=description,
-        price=price,
-        url=url,
-        category_id=category_id,
-    )
-    session.add(book)
-    session.commit()
-    session.refresh(book)
-    return book
+def remove_category(db: Session, category: Category) -> None:
+    db.delete(category)
+    db.commit()
 
 
-def get_book(session, book_id):
-    return session.get(Book, book_id)
-
-
-def get_books(session, category_id=None):
-    query = session.query(Book)
+def list_books(db: Session, category_id: int | None = None) -> list[Book]:
+    statement = select(Book).order_by(Book.id)
     if category_id is not None:
-        query = query.filter(Book.category_id == category_id)
-    return query.order_by(Book.id).all()
+        statement = statement.where(Book.category_id == category_id)
+    return list(db.scalars(statement))
 
 
-def update_book(session, book_id, **fields):
-    book = get_book(session, book_id)
-    if book is None:
-        return None
+def find_book(db: Session, book_id: int) -> Book | None:
+    return db.get(Book, book_id)
 
-    for field, value in fields.items():
-        if hasattr(book, field):
-            setattr(book, field, value)
 
-    session.commit()
-    session.refresh(book)
+def add_book(db: Session, payload: schemas.BookCreate) -> Book:
+    values = payload.model_dump(mode="json")
+    book = Book(**values)
+    db.add(book)
+    db.commit()
+    db.refresh(book)
     return book
 
 
-def delete_book(session, book_id):
-    book = get_book(session, book_id)
-    if book is None:
-        return False
+def edit_book(db: Session, book: Book, payload: schemas.BookUpdate) -> Book:
+    for name, value in payload.model_dump(mode="json").items():
+        setattr(book, name, value)
+    db.commit()
+    db.refresh(book)
+    return book
 
-    session.delete(book)
-    session.commit()
-    return True
+
+def remove_book(db: Session, book: Book) -> None:
+    db.delete(book)
+    db.commit()
